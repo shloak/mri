@@ -30,7 +30,6 @@ def show_all_variables():
 def get_image(image_path, input_height, input_width,
               resize_height=64, resize_width=64,
               crop=True, grayscale=False):
-  print(image_path)
   image = imread(image_path, grayscale)
   cropped_image = center_crop(
       image, input_height, input_width, 
