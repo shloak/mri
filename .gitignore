@@ -1,2 +1,7 @@
 # data
 data
+test_img_slices
+train_img_slices
+valid_img_slices
+logs
+.ipynb_checkpoints
