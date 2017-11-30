@@ -7,11 +7,11 @@ import numpy as np
 folder = 'data/train_img_slices'
 filename = '1_0.ra'
 #256 x 320
-for i in range(2):
+for i in range(30, 50):
     img = ra.read_ra(os.path.join(folder, '1_{}.ra'.format(i)))
     mag = abs(img)
 
-    print(len(mag.shape))
+    print(i)
 
     plt.figure()
     plt.imshow(mag, cmap='gray')

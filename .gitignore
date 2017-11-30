@@ -5,3 +5,4 @@ train_img_slices
 valid_img_slices
 logs
 .ipynb_checkpoints
+__pycache__
