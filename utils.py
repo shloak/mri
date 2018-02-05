@@ -2,6 +2,7 @@
 Some codes from https://github.com/Newmu/dcgan_code
 """
 from __future__ import division
+from skimage.util.shape import view_as_windows
 import math
 import json
 import random
@@ -23,6 +24,7 @@ pp = pprint.PrettyPrinter()
 
 get_stddev = lambda x, k_h, k_w: 1/math.sqrt(k_w*k_h*x.get_shape()[-1])
 
+
 def show_all_variables():
   model_vars = tf.trainable_variables()
   slim.model_analyzer.analyze_vars(model_vars, print_info=True)
@@ -34,9 +36,15 @@ def get_image(image_path, input_height, input_width,
   cropped_image = center_crop(
       image, input_height, input_width, 
       resize_height, resize_width)
-  return np.array(cropped_image)/127.5 - 1
+  return patch(np.array(cropped_image)/127.5 - 1, input_height, input_width)
   #return transform(image, input_height, input_width,
   #                 resize_height, resize_width, crop)
+
+def patch(image, height, width):
+  window_shape = (height, width)
+  B = view_as_windows(image, window_shape, step=32)
+  return B
+
 
 def save_images(images, size, image_path):
   return imsave(inverse_transform(images), size, image_path)

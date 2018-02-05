@@ -17,10 +17,10 @@ def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
 
 class DCGAN(object):
-  def __init__(self, sess, input_height=256, input_width=320, crop=False,
-         batch_size=64, sample_num = 64, output_height=256, output_width=320,
+  def __init__(self, sess, input_height=64, input_width=64, crop=False,
+         batch_size=2, sample_num = 64, output_height=64, output_width=64,
          y_dim=None, z_dim=2000, gf_dim=64, df_dim=64, # change z_dim * 20
-         gfc_dim=10240, dfc_dim=10240, c_dim=3, dataset_name='train_img_slices', 
+         gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='train_img_slices', 
          input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
     """
 
@@ -170,7 +170,7 @@ class DCGAN(object):
       sample_labels = self.data_y[0:self.sample_num]
     else:
       sample_files = self.data[0:self.sample_num]
-      sample = [
+      sample_patch = [
           get_image(sample_file,
                     input_height=self.input_height,
                     input_width=self.input_width,
@@ -178,9 +178,11 @@ class DCGAN(object):
                     resize_width=self.output_width,
                     crop=self.crop,
                     grayscale=self.grayscale) for sample_file in sample_files]
-      if (self.grayscale):
+
+    sample = np.reshape(sample_patch, (np.shape(sample_patch)[0] * np.shape(sample_patch)[1] * np.shape(sample_patch)[2], self.input_height, self.input_width))
+    if (self.grayscale):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
-      else:
+    else:
         sample_inputs = np.array(sample).astype(np.float32)
   
     counter = 1
@@ -207,7 +209,7 @@ class DCGAN(object):
           batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
         else:
           batch_files = self.data[idx*config.batch_size:(idx+1)*config.batch_size]
-          batch = [
+          batch_patch = [
               get_image(batch_file,
                         input_height=self.input_height,
                         input_width=self.input_width,
@@ -215,6 +217,8 @@ class DCGAN(object):
                         resize_width=self.output_width,
                         crop=self.crop,
                         grayscale=self.grayscale) for batch_file in batch_files]
+          batch = np.reshape(batch_patch, (np.shape(batch_patch)[0] * np.shape(batch_patch)[1] * np.shape(batch_patch)[2], self.input_height, self.input_width))
+
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
           else:
