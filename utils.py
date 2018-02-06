@@ -3,6 +3,7 @@ Some codes from https://github.com/Newmu/dcgan_code
 """
 from __future__ import division
 from skimage.util.shape import view_as_windows
+from sklearn.feature_extraction import image
 import math
 import json
 import random
@@ -29,22 +30,38 @@ def show_all_variables():
   model_vars = tf.trainable_variables()
   slim.model_analyzer.analyze_vars(model_vars, print_info=True)
 
-def get_image(image_path, input_height, input_width,
-              resize_height=64, resize_width=64,
+# gets image patches for one images, return size is [16, 64, 80], puts between [-1, 1]    
+def get_image(image_path, input_height=256, input_width=320,
+              resize_height=64, resize_width=80,
               crop=True, grayscale=False):
+  return patch_tf(get_image_old(image_path))
+ 
+# gets one image from path, does not patch, puts between [-1, 1]    
+def get_image_old(image_path, input_height=256, input_width=320,
+              resize_height=256, resize_width=320,
+              crop=False, grayscale=False):
   image = imread(image_path, grayscale)
   cropped_image = center_crop(
       image, input_height, input_width, 
       resize_height, resize_width)
-  return patch(np.array(cropped_image)/127.5 - 1, input_height, input_width)
-  #return transform(image, input_height, input_width,
-  #                 resize_height, resize_width, crop)
+  return np.array(cropped_image)/127.5 - 1 # *2 - 1
 
-def patch(image, height, width):
-  window_shape = (height, width)
-  B = view_as_windows(image, window_shape, step=32)
-  return B
-
+# patches into 64x80 patches
+def patch_tf(image_, height=64, width=80):
+  #with tf.Session() as sess:
+  img = (tf.extract_image_patches(images=tf.expand_dims(tf.expand_dims(image_, 0), 3), ksizes=[1, 64, 80, 1], 
+                                  strides=[1, 64, 80, 1], rates=[1, 1, 1, 1], padding='VALID').eval())
+  img = np.reshape(img, (16, 64, 80))
+  return img    
+    
+# pieces back the patches into one image of size (256, 320). requires as input (16, 64, 80) or (4, 4, 64, 80)
+def patch_together(img): 
+    img = np.reshape(img, (4, 4, 64, 80)) # rows, cols, height, width
+    x, y = np.shape(img)[0], np.shape(img)[1]
+    horiz = []
+    for i in range(x):
+        horiz.append(np.hstack((img[i, :])))
+    return np.vstack(horiz[:]) 
 
 def save_images(images, size, image_path):
   return imsave(inverse_transform(images), size, image_path)
@@ -53,11 +70,11 @@ def imread(path, grayscale = False):
   return abs(ra.read_ra(os.path.join(path)))
 
 
-#def imread(path, grayscale = False):
-#  if (grayscale):
-#    return scipy.misc.imread(path, flatten = True).astype(np.float)
-#  else:
-#    return scipy.misc.imread(path).astype(np.float)
+def imread_old(path, grayscale = True):
+  if (grayscale):
+    return scipy.misc.imread(path, flatten = True).astype(np.float)
+  else:
+    return scipy.misc.imread(path).astype(np.float)
 
 def merge_images(images, size):
   return inverse_transform(images)
