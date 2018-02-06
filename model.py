@@ -17,8 +17,8 @@ def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
 
 class DCGAN(object):
-  def __init__(self, sess, input_height=64, input_width=64, crop=False,
-         batch_size=2, sample_num = 64, output_height=64, output_width=64,
+  def __init__(self, sess, input_height=64, input_width=80, crop=False,
+         batch_size=64, sample_num = 64, output_height=64, output_width=80,
          y_dim=None, z_dim=100, gf_dim=64, df_dim=64, # change z_dim * 20
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='train_img_slices', 
          input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
@@ -102,7 +102,7 @@ class DCGAN(object):
       image_dims = [self.input_height, self.input_width, self.c_dim]
 
     self.inputs = tf.placeholder(
-      tf.float32, [self.batch_size] + image_dims, name='real_images')
+      tf.float32, [self.batch_size] + image_dims, name='real_images') 
 
     inputs = self.inputs
 
@@ -169,17 +169,11 @@ class DCGAN(object):
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
     else:
-      sample_files = self.data[0:self.sample_num]
-      sample_patch = [
-          get_image(sample_file,
-                    input_height=self.input_height,
-                    input_width=self.input_width,
-                    resize_height=self.output_height,
-                    resize_width=self.output_width,
-                    crop=self.crop,
-                    grayscale=self.grayscale) for sample_file in sample_files]
+      sample_files = self.data[0:(self.sample_num // 16)]
+      sample = get_image(sample_files[0])
+      for i in range(1, len(sample_files)):
+          sample = np.vstack((sample, get_image(sample_files[i])))
 
-    sample = np.reshape(sample_patch, (np.shape(sample_patch)[0] * np.shape(sample_patch)[1] * np.shape(sample_patch)[2], self.input_height, self.input_width))
     if (self.grayscale):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
     else:
@@ -201,23 +195,18 @@ class DCGAN(object):
         self.data = glob(("./data/{0}/*.ra").format(self.dataset_name))
         #self.data = glob(os.path.join(
         #  "./data", config.dataset, self.input_fname_pattern))
-        batch_idxs = min(len(self.data), config.train_size) // config.batch_size
+        batch_idxs = min(len(self.data), config.train_size) // (config.batch_size // 16) # changed //16
 
       for idx in xrange(0, batch_idxs):
         if config.dataset == 'mnist':
-          batch_images = self.data_X[idx*config.batch_size:(idx+1)*config.batch_size]
+          batch_images = self.data_X[idx*(config.batch_size):(idx+1)*(config.batch_size)]
           batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
         else:
-          batch_files = self.data[idx*config.batch_size:(idx+1)*config.batch_size]
-          batch_patch = [
-              get_image(batch_file,
-                        input_height=self.input_height,
-                        input_width=self.input_width,
-                        resize_height=self.output_height,
-                        resize_width=self.output_width,
-                        crop=self.crop,
-                        grayscale=self.grayscale) for batch_file in batch_files]
-          batch = np.reshape(batch_patch, (np.shape(batch_patch)[0] * np.shape(batch_patch)[1] * np.shape(batch_patch)[2], self.input_height, self.input_width))
+          batch_files = self.data[idx*(config.batch_size//16):(idx+1)*(config.batch_size//16)] # changed //16
+
+          batch = get_image(batch_files[0])
+          for i in range(1, len(batch_files)):
+              batch = np.vstack((batch, get_image(batch_files[i])))
 
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
@@ -301,19 +290,19 @@ class DCGAN(object):
                   './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
             print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
           else:
-            try:
-              samples, d_loss, g_loss = self.sess.run(
-                [self.sampler, self.d_loss, self.g_loss],
-                feed_dict={
-                    self.z: sample_z,
-                    self.inputs: sample_inputs,
-                },
-              )
-              save_images(samples, image_manifold_size(samples.shape[0]),
-                    './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
-              print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
-            except:
-              print("one pic error!...")
+            #try:
+            samples, d_loss, g_loss = self.sess.run(
+              [self.sampler, self.d_loss, self.g_loss],
+              feed_dict={
+                  self.z: sample_z,
+                  self.inputs: sample_inputs,
+              },
+            )
+            save_images(samples, image_manifold_size(samples.shape[0]),
+                  './{}/train_{:02d}_{:04d}.png'.format(config.sample_dir, epoch, idx))
+            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
+            #except:
+              #print("one pic error!...")
 
         if np.mod(counter, 500) == 2:
           self.save(config.checkpoint_dir, counter)
