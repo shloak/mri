@@ -54,6 +54,13 @@ def patch_tf(image_, height=64, width=80):
   img = np.reshape(img, (16, 64, 80))
   return img    
     
+def patch_new(path, height=64, width=80):
+  #with tf.Session() as sess:
+   image_ = get_image_old(path)
+   img = (tf.space_to_batch_nd(input=tf.expand_dims(tf.expand_dims(image_, 0), 3), block_shape=[64, 80], 
+                                   paddings=[[0, 0], [0, 0]]).eval())
+   img = np.reshape(img, (16, 64, 80))
+   return img 
 # pieces back the patches into one image of size (256, 320). requires as input (16, 64, 80) or (4, 4, 64, 80)
 def patch_together(img): 
     img = np.reshape(img, (4, 4, 64, 80)) # rows, cols, height, width
@@ -69,6 +76,8 @@ def save_images(images, size, image_path):
 def imread(path, grayscale = False):
   return abs(ra.read_ra(os.path.join(path)))
 
+def imread_new(path, grayscale = False):
+  return np.load(path)
 
 def imread_old(path, grayscale = True):
   if (grayscale):
