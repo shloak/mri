@@ -78,11 +78,11 @@ class DCGAN(object):
       self.c_dim = self.data_X[0].shape[-1]
     else:
       #self.data = glob(os.path.join("./data", self.dataset_name, self.input_fname_pattern))
-      self.data = glob(("./data/{0}/*.ra").format(self.dataset_name))
+      self.data = glob(("./Patches/*.npy"))
       #print(('data length: {}').format(len(self.data)))
-      imreadImg = imread(self.data[0]);
+      imreadImg = imread_new(self.data[0]);
       if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
-        self.c_dim = imread(self.data[0]).shape[-1]
+        self.c_dim = imread_new(self.data[0]).shape[-1]
       else:
         self.c_dim = 1
 
@@ -169,11 +169,13 @@ class DCGAN(object):
       sample_inputs = self.data_X[0:self.sample_num]
       sample_labels = self.data_y[0:self.sample_num]
     else:
-      sample_files = self.data[0:(self.sample_num // 16)]
-      sample = get_image(sample_files[0])
-      for i in range(1, len(sample_files)):
-          sample = np.vstack((sample, get_image(sample_files[i])))
-
+      #sample_files = self.data[0:(self.sample_num // 16)]
+      #sample = get_image(sample_files[0])
+      #for i in range(1, len(sample_files)):
+      #    sample = np.vstack((sample, get_image(sample_files[i])))
+      sample_files = self.data[0:(self.sample_num)]
+      sample = [imread_new(d) for d in sample_files]
+            
     if (self.grayscale):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
     else:
@@ -192,21 +194,23 @@ class DCGAN(object):
       if config.dataset == 'mnist':
         batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
       else:      
-        self.data = glob(("./data/{0}/*.ra").format(self.dataset_name))
+        self.data = sorted(glob("./Patches/*.npy"))
         #self.data = glob(os.path.join(
         #  "./data", config.dataset, self.input_fname_pattern))
-        batch_idxs = min(len(self.data), config.train_size) // (config.batch_size // 16) # changed //16
+        batch_idxs = min(len(self.data), config.train_size) // config.batch_size # changed //16
 
       for idx in xrange(0, batch_idxs):
         if config.dataset == 'mnist':
           batch_images = self.data_X[idx*(config.batch_size):(idx+1)*(config.batch_size)]
           batch_labels = self.data_y[idx*config.batch_size:(idx+1)*config.batch_size]
         else:
-          batch_files = self.data[idx*(config.batch_size//16):(idx+1)*(config.batch_size//16)] # changed //16
+          #batch_files = self.data[idx*(config.batch_size//16):(idx+1)*(config.batch_size//16)] # changed //16
 
-          batch = get_image(batch_files[0])
-          for i in range(1, len(batch_files)):
-              batch = np.vstack((batch, get_image(batch_files[i])))
+          #batch = get_image(batch_files[0])
+          #for i in range(1, len(batch_files)):
+          #    batch = np.vstack((batch, get_image(batch_files[i])))
+          batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
+          batch = [imread_new(d) for d in batch_files]                 
 
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
