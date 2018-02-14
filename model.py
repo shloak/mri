@@ -78,7 +78,7 @@ class DCGAN(object):
       self.c_dim = self.data_X[0].shape[-1]
     else:
       #self.data = glob(os.path.join("./data", self.dataset_name, self.input_fname_pattern))
-      self.data = glob(("./Patches/*.npy"))
+      self.data = glob(("./Patches32/*.npy"))
       #print(('data length: {}').format(len(self.data)))
       imreadImg = imread_new(self.data[0]);
       if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
@@ -194,7 +194,7 @@ class DCGAN(object):
       if config.dataset == 'mnist':
         batch_idxs = min(len(self.data_X), config.train_size) // config.batch_size
       else:      
-        self.data = sorted(glob("./Patches/*.npy"))
+        self.data = sorted(glob("./Patches32/*.npy"))
         #self.data = glob(os.path.join(
         #  "./data", config.dataset, self.input_fname_pattern))
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size # changed //16
