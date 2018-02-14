@@ -34,7 +34,7 @@ def show_all_variables():
 def get_image(image_path, input_height=256, input_width=320,
               resize_height=64, resize_width=80,
               crop=True, grayscale=False):
-  return patch_tf(get_image_old(image_path))
+  return patch_tf(get_image_old(image_path), resize_height, resize_width)
  
 # gets one image from path, does not patch, puts between [-1, 1]    
 def get_image_old(image_path, input_height=256, input_width=320,
@@ -46,12 +46,22 @@ def get_image_old(image_path, input_height=256, input_width=320,
       resize_height, resize_width)
   return np.array(cropped_image)/127.5 - 1 # *2 - 1
 
+# gets one image from path, resizes by size factor, puts between [-1, 1]    
+def get_image_old(image_path, size, input_height=256, input_width=320,
+              resize_height=256, resize_width=320,
+              crop=False, grayscale=False):
+  image = imread(image_path, grayscale)
+  cropped_image = center_crop(
+      image, input_height, input_width, 
+      resize_height, resize_width)
+  return scipy.misc.imresize(np.array(cropped_image)/127.5 - 1, 0.25) # *2 - 1
+
 # patches into 64x80 patches
-def patch_tf(image_, height=64, width=80):
+def patch_tf(image_, height, width):
   #with tf.Session() as sess:
-  img = (tf.extract_image_patches(images=tf.expand_dims(tf.expand_dims(image_, 0), 3), ksizes=[1, 64, 80, 1], 
-                                  strides=[1, 64, 80, 1], rates=[1, 1, 1, 1], padding='VALID').eval())
-  img = np.reshape(img, (16, 64, 80))
+  img = (tf.extract_image_patches(images=tf.expand_dims(tf.expand_dims(image_, 0), 3), ksizes=[1, height, width, 1], 
+                                  strides=[1, height, width, 1], rates=[1, 1, 1, 1], padding='VALID').eval())
+  img = np.reshape(img, ((256*320)//(height*width), height, width))
   return img    
     
 def patch_new(path, height=64, width=80):
@@ -62,8 +72,9 @@ def patch_new(path, height=64, width=80):
    img = np.reshape(img, (16, 64, 80))
    return img 
 # pieces back the patches into one image of size (256, 320). requires as input (16, 64, 80) or (4, 4, 64, 80)
-def patch_together(img): 
-    img = np.reshape(img, (4, 4, 64, 80)) # rows, cols, height, width
+def patch_together(img, height, width): 
+    
+    img = np.reshape(img, (256//height, 320//width, height, width)) # rows, cols, height, width
     x, y = np.shape(img)[0], np.shape(img)[1]
     horiz = []
     for i in range(x):
