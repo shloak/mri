@@ -81,6 +81,12 @@ def patch_together(img, height, width):
         horiz.append(np.hstack((img[i, :])))
     return np.vstack(horiz[:]) 
 
+def addZeros(epoch, idx):
+    num = epoch*10 + idx
+    while len(str(num)) < 10:
+        num = str('0' + str(num))
+    return num
+
 def save_images(images, size, image_path):
   return imsave(inverse_transform(images), size, image_path)
 
