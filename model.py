@@ -81,10 +81,10 @@ class DCGAN(object):
       self.data_X, self.data_y = self.load_mnist()
       self.c_dim = self.data_X[0].shape[-1]
     else:
-      #self.data = glob(os.path.join("./data", self.dataset_name, self.input_fname_pattern))
-      self.data = sorted(glob(("./Patches32/*.npy")))[0:64]
-      imreadImg = imread_new(self.data[0]);
-      #imreadImg = get_image_old(self.data[0], 0.25);
+      self.data = glob("./data/train_img_slices/*.ra")[0:8]
+      #self.data = sorted(glob(("./Patches32/*.npy")))[0:64]
+      #imreadImg = imread_new(self.data[0]);
+      imreadImg = get_image_old1(self.data[0]);
       if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
         self.c_dim = imread_new(self.data[0]).shape[-1]
       else:
@@ -178,8 +178,8 @@ class DCGAN(object):
       #for i in range(1, len(sample_files)):
       #    sample = np.vstack((sample, get_image(sample_files[i])))
       sample_files = self.data[0:(self.sample_num)]
-      sample = [imread_new(d) for d in sample_files]
-      #sample = [get_image_old(d, 0.25) for  d in sample_files]
+      #sample = [imread_new(d) for d in sample_files]
+      sample = [get_image_old1(d) for  d in sample_files]
             
     if (self.grayscale):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
@@ -214,8 +214,8 @@ class DCGAN(object):
           #for i in range(1, len(batch_files)):
           #    batch = np.vstack((batch, get_image(batch_files[i])))
           batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
-          batch = [imread_new(d) for d in batch_files]    
-          #batch = [get_image_old(d, 0.25) for d in batch_files]
+          #batch = [imread_new(d) for d in batch_files]    
+          batch = [get_image_old1(d) for d in batch_files]
 
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
@@ -285,7 +285,7 @@ class DCGAN(object):
           % (epoch, idx, batch_idxs,
             time.time() - start_time, errD_fake+errD_real, errG))
 
-        if np.mod(counter, 10) == 1: #100
+        if np.mod(counter, 25) == 1: #100
           if config.dataset == 'mnist':
             samples, d_loss, g_loss = self.sess.run(
               [self.sampler, self.d_loss, self.g_loss],

@@ -37,7 +37,7 @@ def get_image(image_path, input_height=256, input_width=320,
   return patch_tf(get_image_old(image_path), resize_height, resize_width)
  
 # gets one image from path, does not patch, puts between [-1, 1]    
-def get_image_old(image_path, input_height=256, input_width=320,
+def get_image_old1(image_path, input_height=256, input_width=320,
               resize_height=256, resize_width=320,
               crop=False, grayscale=False):
   image = imread(image_path, grayscale)
