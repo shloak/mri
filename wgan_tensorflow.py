@@ -3,23 +3,23 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
 import os
+import ra
+import struct
+import warnings
 import scipy.misc
 from glob import glob
-from utils import imread, 
 
-
-mb_size = 32
+mb_size = 4
 X_dim = 256*320
 z_dim = 100
-h_dim = 128
+h_dim = 2560 #128
 
-data = get_data
-dataset_size = len(data)
 batch_counter = 0
+file_dir = 'out3/'
 
 
-def get_data:
-  data = glob("./data/train_img_slices/*.ra")
+def get_data():
+  data = glob("./data/train_img_slices/*.ra")[0:8]
   return data
 
 def imread(path):
@@ -28,16 +28,51 @@ def imread(path):
 # gets one image from path, resizes by size factor, puts between [-1, 1]    
 def get_image_old(image_path):
   image = imread(image_path)
-  return np.array(image)/127.5 - 1 # *2 - 1
+  return np.array(image)/127.5 - 1 # 
 
 def next_batch(size):
+   global batch_counter
    next = batch_counter + size
    if next > dataset_size:
       batch_counter = 0
       next = batch_counter + size
-   files = [data[i] for i in range(batch_counter, size)]
+   files = [data[i] for i in range(batch_counter, next)]
    batch_counter = next
-   return [get_image_old(d) for d in files]
+   ret = [get_image_old(d).flatten() for d in files]
+   return ret
+
+def merge(images, size):
+  h, w = images.shape[1], images.shape[2]
+  if (images.shape[3] in (3,4)):
+    c = images.shape[3]
+    img = np.zeros((h * size[0], w * size[1], c))
+    for idx, image in enumerate(images):
+      i = idx % size[1]
+      j = idx // size[1]
+      img[j * h:j * h + h, i * w:i * w + w, :] = image
+    return img
+  elif images.shape[3]==1:
+    img = np.zeros((h * size[0], w * size[1]))
+    for idx, image in enumerate(images):
+      i = idx % size[1]
+      j = idx // size[1]
+      img[j * h:j * h + h, i * w:i * w + w] = image[:,:,0]
+    return img
+  else:
+    raise ValueError('in merge(images,size) images parameter '
+                     'must have dimensions: HxW or HxWx3 or HxWx4')
+
+def imsave(images, size, path):
+  image = np.squeeze(merge(images, size))
+  return scipy.misc.imsave(path, image)
+
+
+def inverse_transform(images):
+  return images
+  #return (images+1.)/2.
+
+def save_images(images, size, image_path):
+  return imsave(inverse_transform(images), size, image_path)
 
 
 def plot(samples):
@@ -51,7 +86,7 @@ def plot(samples):
         ax.set_xticklabels([])
         ax.set_yticklabels([])
         ax.set_aspect('equal')
-        plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
+        #plt.imshow(sample.reshape(28, 28), cmap='Greys_r')
 
     return fig
 
@@ -61,6 +96,9 @@ def xavier_init(size):
     xavier_stddev = 1. / tf.sqrt(in_dim / 2.)
     return tf.random_normal(shape=size, stddev=xavier_stddev)
 
+
+data = get_data()
+dataset_size = len(data)
 
 X = tf.placeholder(tf.float32, shape=[None, X_dim])
 
@@ -118,14 +156,16 @@ clip_D = [p.assign(tf.clip_by_value(p, -0.01, 0.01)) for p in theta_D]
 sess = tf.Session()
 sess.run(tf.global_variables_initializer())
 
-if not os.path.exists('out/'):
-    os.makedirs('out/')
+if not os.path.exists(file_dir):
+    os.makedirs(file_dir)
 
 i = 0
 
 for it in range(1000000):
+    if it == 0:
+      print("in loop")
     for _ in range(5):
-        X_mb, _ = next_batch(mb_size)
+        X_mb = next_batch(mb_size)
 
         _, D_loss_curr, _ = sess.run(
             [D_solver, D_loss, clip_D],
@@ -137,15 +177,17 @@ for it in range(1000000):
         feed_dict={z: sample_z(mb_size, z_dim)}
     )
 
-    if it % 100 == 0:
+    if it % 10 == 0:
         print('Iter: {}; D loss: {:.4}; G_loss: {:.4}'
               .format(it, D_loss_curr, G_loss_curr))
 
         if it % 1000 == 0:
-            samples = sess.run(G_sample, feed_dict={z: sample_z(16, z_dim)})
+            samples = sess.run(G_sample, feed_dict={z: sample_z(mb_size, z_dim)})
+            samples = np.reshape(samples, (mb_size, 256, 320, 1))
 
-            fig = plot(samples)
-            plt.savefig('out/{}.png'
-                        .format(str(i).zfill(3)), bbox_inches='tight')
+            #fig = plot(samples)
+            #plt.savefig('out/{}.png'
+            #            .format(str(i).zfill(3)), bbox_inches='tight')
+            save_images(samples, (2, 2), file_dir + '{}.png'.format(str(i).zfill(4)))
             i += 1
-            plt.close(fig)
+            #plt.close(fig)
