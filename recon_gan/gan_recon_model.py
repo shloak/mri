@@ -48,10 +48,11 @@ class DCAM(object):
 
     self.checkpoint_dir = checkpoint_dir
 
-    self.data = glob("./data/train_img_slices/*.ra")
+    #self.data = glob("../data/train_img_slices/*.ra")
+    self.data = glob("../img_align_celeba/*.jpg")[:3000]
     random.shuffle(self.data)
     
-    self.height, self.width = imread(self.data[0]).shape
+    self.height, self.width = imread(self.data[0], True).shape
 
     self.build_model()
 
@@ -62,19 +63,33 @@ class DCAM(object):
 
     inputs = self.inputs
 
-    self.z = tf.Variable(tf.random_uniform([self.batch_size, self.z_dim],
-                                          -1, 1, dtype=tf.float32),
+    self.z = tf.Variable(tf.random_normal([self.batch_size, self.z_dim],
+                                          stddev=1e-5, dtype=tf.float32),
                          name='z')
     self.z_sum = histogram_summary("z", self.z)
 
     self.Gz = self.generator(self.z)
+    
+    self.D, self.D_logits = self.discriminator(inputs)
+    self.D_, self.D_logits_ = self.discriminator(self.Gz, reuse=True)
+    self.d_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
+    self.g_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
+    # TODO: create g optim and d optim, figure out when to run them in train
 
     self.loss = tf.reduce_mean((self.Gz - inputs)**2)
+    
+    l1_regularizer = tf.contrib.layers.l1_regularizer(
+       scale=0.005, scope=None)
+    self.L1 = tf.contrib.layers.apply_regularization(l1_regularizer, [self.z])
+    
+    self.total_loss = self.loss + self.L1
 
     t_vars = tf.trainable_variables()
+    
 
     self.g_vars = [var for var in t_vars if 'g_' in var.name]
-
+    self.d_vars = [var for var in t_vars if 'd_' in var.name]
+    
     self.saver = tf.train.Saver()
 
   def train(self, config):
@@ -101,7 +116,7 @@ class DCAM(object):
 
       for idx in xrange(batch_idxs):
         batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
-        batch = [imread(d) for d in batch_files]
+        batch = [imread(d, True) for d in batch_files]
 
         batch_images = np.expand_dims(np.array(batch).astype(np.float32), axis=-1)
 
@@ -123,12 +138,12 @@ class DCAM(object):
                 % (epoch, it, idx, batch_idxs, err))
 
         counter += 1        
-        if counter % 25 == 0:
+        if counter % 50 == 0:
           Gz = self.sess.run(self.Gz)
           save_images(Gz, image_manifold_size(Gz.shape[0]),
                       './{}/{}.png'.format(config.sample_dir, addZeros(epoch, idx, batch_idxs)))
 
-        if counter % 500 == 2:
+        if counter % 250 == 2:
           self.save(config.checkpoint_dir, counter)
 
   def generator(self, z):
@@ -163,6 +178,19 @@ class DCAM(object):
           h3, [self.batch_size, s_h, s_w, 1], name='g_h4', with_w=True)
 
       return tf.nn.tanh(h4)
+
+  def discriminator(self, image, reuse=False):
+    with tf.variable_scope("discriminator") as scope:
+      if reuse:
+        scope.reuse_variables()
+        
+      h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+      h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
+      h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
+      h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
+      h4 = linear(tf.reshape(h3, [self.batch_size, -1]), 1, 'd_h4_lin')
+
+      return tf.nn.sigmoid(h4), h4  
     
   @property
   def model_dir(self):
@@ -178,6 +206,8 @@ class DCAM(object):
     self.saver.save(self.sess,
             os.path.join(checkpoint_dir, model_name),
             global_step=step)
+    zsave = np.array(self.z.eval())
+    np.save(('./{}/{}').format(checkpoint_dir, str(step)) , zsave)
 
   def load(self, checkpoint_dir):
     import re

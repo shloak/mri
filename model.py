@@ -19,7 +19,7 @@ def conv_out_size_same(size, stride):
 class DCGAN(object):
   def __init__(self, sess, input_height=64, input_width=80, crop=False,
          batch_size=64, sample_num = 64, output_height=64, output_width=80,
-         y_dim=None, z_dim=100, gf_dim=64, df_dim=64, # change z_dim * 20
+         y_dim=None, z_dim=1000, gf_dim=64, df_dim=64, # change z_dim * 20
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='train_img_slices', 
          input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
     """
@@ -80,10 +80,10 @@ class DCGAN(object):
     if self.dataset_name == 'mnist':
       print('mnist')  
     else:
-      #self.data = glob("./data/train_img_slices/*.ra")[0:8]
-      self.data = sorted(glob(("./Patches32/*.npy")))[0:64]
-      imreadImg = imread_new(self.data[0]);
-      #imreadImg = get_image_old1(self.data[0]);
+      self.data = glob("./img_align_celeba/*.jpg")[:3000]
+      #self.data = glob("./data/train_img_slices/*.ra")
+      random.shuffle(self.data)
+      imreadImg = get_image_old1(self.data[0], True);
       if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
         self.c_dim = imread_new(self.data[0]).shape[-1]
       else:
@@ -155,6 +155,10 @@ class DCGAN(object):
               .minimize(self.d_loss, var_list=self.d_vars)
     g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
               .minimize(self.g_loss, var_list=self.g_vars)
+    #d_optim = tf.train.GradientDescentOptimizer(config.learning_rate) \
+    #          .minimize(self.d_loss, var_list=self.d_vars)
+    #g_optim = tf.train.AdamOptimizer(config.learning_rate) \
+    #          .minimize(self.g_loss, var_list=self.g_vars)
     try:
       tf.global_variables_initializer().run()
     except:
@@ -166,6 +170,7 @@ class DCGAN(object):
         [self.z_sum, self.d_sum, self.d_loss_real_sum, self.d_loss_sum])
     self.writer = SummaryWriter("./logs", self.sess.graph)
 
+    #sample_z = np.random.normal(0, 1e-5, size=(self.sample_num , self.z_dim))
     sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
     
     if config.dataset == 'mnist':
@@ -176,8 +181,8 @@ class DCGAN(object):
       #for i in range(1, len(sample_files)):
       #    sample = np.vstack((sample, get_image(sample_files[i])))
       sample_files = self.data[0:(self.sample_num)]
-      sample = [imread_new(d) for d in sample_files]
-      #sample = [get_image_old1(d) for  d in sample_files]
+      #sample = [imread_new(d) for d in sample_files]
+      sample = [get_image_old1(d, True) for  d in sample_files]
             
     if (self.grayscale):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
@@ -213,8 +218,8 @@ class DCGAN(object):
           #for i in range(1, len(batch_files)):
           #    batch = np.vstack((batch, get_image(batch_files[i])))
           batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
-          batch = [imread_new(d) for d in batch_files]    
-          #batch = [get_image_old1(d) for d in batch_files]
+          #batch = [imread_new(d) for d in batch_files]    
+          batch = [get_image_old1(d, True) for d in batch_files]
 
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
@@ -223,6 +228,7 @@ class DCGAN(object):
 
         batch_z = np.random.uniform(-1, 1, [config.batch_size, self.z_dim]) \
               .astype(np.float32)
+        self.zbatch = batch_z
 
         if config.dataset == 'mnist':
           print('mnist')  
@@ -234,7 +240,7 @@ class DCGAN(object):
           self.writer.add_summary(summary_str, counter)
           countD += 1
 
-          if np.mod(countD, 5) == 0:      
+          if np.mod(countD, 1) == 0:      
             # Update G network
             _, summary_str = self.sess.run([g_optim, self.g_sum],
               feed_dict={ self.z: batch_z })
@@ -262,8 +268,8 @@ class DCGAN(object):
               samples, d_loss, g_loss = self.sess.run(
                 [self.sampler, self.d_loss, self.g_loss],
                   feed_dict={
-                    self.z: sample_z,
-                    self.inputs: sample_inputs,
+                    self.z: batch_z, #sample_z
+                    self.inputs: batch_images, #sample_inputs
                   },
                 )
               save_images(samples, image_manifold_size(samples.shape[0]),
@@ -412,6 +418,9 @@ class DCGAN(object):
     self.saver.save(self.sess,
             os.path.join(checkpoint_dir, model_name),
             global_step=step)
+    
+    zsave = np.array(self.zbatch)
+    np.save(('./{}/{}').format(checkpoint_dir, str(step)) , zsave)
 
   def load(self, checkpoint_dir):
     import re

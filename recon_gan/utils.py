@@ -4,6 +4,8 @@ Some codes from https://github.com/Newmu/dcgan_code
 from __future__ import division
 from skimage.util.shape import view_as_windows
 from sklearn.feature_extraction import image
+from skimage import color
+from skimage import io
 import math
 import json
 import random
@@ -43,7 +45,12 @@ def save_images(images, size, image_path):
 
 def imread(path):
   im = abs(ra.read_ra(os.path.join(path))).T
-  return im
+  return (im - 0.5) / 0.5
+
+def imread(path, grayscale): # only for use with celebA
+  im = color.rgb2gray(io.imread(path))
+  return (im - 0.5) / 0.5
+
 
 def merge_images(images, size):
   return images
@@ -71,6 +78,7 @@ def merge(images, size):
 
   
 def imsave(images, size, path):
+  images = (images * 0.5) + 0.5
   image = np.clip(np.squeeze(merge(images, size)), 0, 1)
   image.ravel()[0] = 0
   image.ravel()[-1] = 1

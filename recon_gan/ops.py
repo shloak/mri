@@ -103,3 +103,9 @@ def linear(input_, output_size, scope=None, stddev=0.02, bias_start=0.0, with_w=
       return tf.matmul(input_, matrix) + bias, matrix, bias
     else:
       return tf.matmul(input_, matrix) + bias
+
+def sigmoid_cross_entropy_with_logits(x, y):
+    try:
+      return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, labels=y)
+    except:
+      return tf.nn.sigmoid_cross_entropy_with_logits(logits=x, targets=y)

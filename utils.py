@@ -4,6 +4,8 @@ Some codes from https://github.com/Newmu/dcgan_code
 from __future__ import division
 from skimage.util.shape import view_as_windows
 from sklearn.feature_extraction import image
+from skimage import color
+from skimage import io
 import math
 import json
 import random
@@ -37,14 +39,13 @@ def get_image(image_path, input_height=256, input_width=320,
   return patch_tf(get_image_old(image_path), resize_height, resize_width)
  
 # gets one image from path, does not patch, puts between [-1, 1]    
-def get_image_old1(image_path, input_height=256, input_width=320,
-              resize_height=256, resize_width=320,
-              crop=False, grayscale=False):
-  image = imread(image_path, grayscale)
-  cropped_image = center_crop(
-      image, input_height, input_width, 
-      resize_height, resize_width)
-  return np.array(cropped_image)/127.5 - 1 # *2 - 1
+def get_image_old1(image_path):
+  image = imread(image_path)
+  return (np.array(image) - 0.5) / 0.5 # *2 - 1
+
+def get_image_old1(image_path, grayscale): # only for celebA images
+  im = color.rgb2gray(io.imread(image_path))
+  return (im - 0.5) / 0.5
 
 # gets one image from path, resizes by size factor, puts between [-1, 1]    
 def get_image_old(image_path, size, input_height=256, input_width=320,
@@ -91,7 +92,7 @@ def save_images(images, size, image_path):
   return imsave(inverse_transform(images), size, image_path)
 
 def imread(path, grayscale = False):
-  return abs(ra.read_ra(os.path.join(path)))
+  return abs(ra.read_ra(os.path.join(path))).T
 
 def imread_new(path, grayscale = False):
   return np.load(path)
@@ -127,8 +128,11 @@ def merge(images, size):
                      'must have dimensions: HxW or HxWx3 or HxWx4')
 
 def imsave(images, size, path):
-  image = np.squeeze(merge(images, size))
+  image = np.clip(np.squeeze(merge(images, size)), 0, 1)
+  image.ravel()[0] = 0
+  image.ravel()[-1] = 1
   return scipy.misc.imsave(path, image)
+
 
 def center_crop(x, crop_h, crop_w,
                 resize_h=64, resize_w=64):
@@ -151,7 +155,8 @@ def transform(image, input_height, input_width,
   return np.array(cropped_image)/127.5 - 1.
 
 def inverse_transform(images):
-  return (images+1.)/2.
+  #return (images+1.)/2.
+  return (images * 0.5) + 0.5
 
 def to_json(output_path, *layers):
   with open(output_path, "w") as layer_f:
