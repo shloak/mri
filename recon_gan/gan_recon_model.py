@@ -11,6 +11,8 @@ from six.moves import xrange
 from ops import *
 from utils import *
 
+pixel_weight = 0.0
+
 def conv_out_size_same(size, stride):
   return int(math.ceil(float(size) / float(stride)))
 
@@ -63,26 +65,29 @@ class DCAM(object):
 
     inputs = self.inputs
 
+    self.z_place = tf.placeholder(tf.float32, [self.batch_size, self.z_dim], name='z_place')
     self.z = tf.Variable(tf.random_normal([self.batch_size, self.z_dim],
-                                          stddev=1e-5, dtype=tf.float32),
-                         name='z')
+                                          stddev=1e-5, dtype=tf.float32), name='z')
     self.z_sum = histogram_summary("z", self.z)
 
-    self.Gz = self.generator(self.z)
+    self.Gz = self.generator(self.z) #self.z
     
     self.D, self.D_logits = self.discriminator(inputs)
     self.D_, self.D_logits_ = self.discriminator(self.Gz, reuse=True)
-    self.d_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
+    self.d_loss_real = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.D_logits, tf.ones_like(self.D)))
+    self.d_loss_fake = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.D_logits_, tf.zeros_like(self.D_)))
+    self.d_loss = self.d_loss_real + self.d_loss_fake
     self.g_loss = tf.reduce_mean(sigmoid_cross_entropy_with_logits(self.D_logits_, tf.ones_like(self.D_)))
-    # TODO: create g optim and d optim, figure out when to run them in train
 
-    self.loss = tf.reduce_mean((self.Gz - inputs)**2)
+    self.loss = tf.reduce_mean((self.Gz - inputs)**2) # changed from l2 (**2) to l1 (abs)
     
     l1_regularizer = tf.contrib.layers.l1_regularizer(
        scale=0.005, scope=None)
     self.L1 = tf.contrib.layers.apply_regularization(l1_regularizer, [self.z])
     
-    self.total_loss = self.loss + self.L1
+    self.total_loss_L1 = self.loss + self.L1
+    
+    self.total_g_loss = pixel_weight * self.loss + (1 - pixel_weight) * self.g_loss
 
     t_vars = tf.trainable_variables()
     
@@ -97,12 +102,17 @@ class DCAM(object):
                       .minimize(self.loss, var_list=self.z)
     g_optim = tf.train.GradientDescentOptimizer(config.learning_rate_g) \
                       .minimize(self.loss, var_list=self.g_vars)
+        
+    d_optim = tf.train.AdamOptimizer(config.learning_rate_d, beta1=config.beta1) \
+                     .minimize(self.d_loss, var_list=self.d_vars)
+    g_optim_2 = tf.train.AdamOptimizer(config.learning_rate_d, beta1=config.beta1) \
+                     .minimize(self.total_g_loss, var_list=self.g_vars)
+
     try:
       tf.global_variables_initializer().run()
     except:
       tf.initialize_all_variables().run()
 
-    counter = 1
     start_time = time.time()
     could_load, checkpoint_counter = self.load(self.checkpoint_dir)
     if could_load:
@@ -110,9 +120,49 @@ class DCAM(object):
       print(" [*] Load SUCCESS")
     else:
       print(" [!] Load failed...")
+    batch_idxs = len(self.data) // config.batch_size
 
+    counter = 0
+    errDis = []
+    errAlt = []
+    errGan = []
+    for epoch in xrange(config.epoch_g):
+      for idx in xrange(batch_idxs):
+        batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
+        batch = [imread(d, True) for d in batch_files]
+        batch_images = np.expand_dims(np.array(batch).astype(np.float32), axis=-1) 
+        for it in xrange(config.d_iter):
+          self.sess.run(d_optim, feed_dict={ self.inputs: batch_images })
+          err = self.d_loss.eval({ self.inputs: batch_images })
+          errDis.append(err)
+          print("DIS2 Epoch: [%2d] g_iter: [%2d], [%4d/%4d], loss: %.8f" \
+                % (epoch, it, idx, batch_idxs, err))
+        '''# Update z
+        self.sess.run(self.z.initializer)
+        for it in xrange(config.z_inner_iter):
+          self.sess.run(z_optim,
+                        feed_dict={ self.inputs: batch_images })
+          err = self.loss.eval({ self.inputs: batch_images })
+          print("Epoch: [%2d] z_iter: [%2d], [%4d/%4d], loss: %.8f" \
+                % (epoch, it, idx, batch_idxs, err))'''
+        for it in xrange(config.g_iter):
+          self.sess.run(g_optim_2, feed_dict={ self.inputs: batch_images })
+          err = self.total_g_loss.eval({ self.inputs: batch_images })
+          errAlt.append(self.loss.eval({ self.inputs: batch_images }))
+          errGan.append(self.g_loss.eval( {self.inputs: batch_images }))
+          print("GEN2 Epoch: [%2d] g_iter: [%2d], [%4d/%4d], loss: %.8f" \
+                % (epoch, it, idx, batch_idxs, err))
+        
+        counter += 1        
+        if counter % 50 == 0:
+          Gz = self.sess.run(self.Gz)
+          save_images(Gz, image_manifold_size(Gz.shape[0]),
+                      './{}/{}new.png'.format(config.sample_dir, addZeros(epoch, idx, batch_idxs)))
+        if counter % 50 == 0: 
+          np.save(('./{}/{}').format(config.checkpoint_dir, addZeros(epoch, idx, batch_idxs)) , [errDis, errGan])
+          
+    errAlt = []    
     for epoch in xrange(config.epoch):
-      batch_idxs = len(self.data) // config.batch_size
 
       for idx in xrange(batch_idxs):
         batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
@@ -134,6 +184,7 @@ class DCAM(object):
           self.sess.run(g_optim,
                         feed_dict={ self.inputs: batch_images })
           err = self.loss.eval({ self.inputs: batch_images })
+          errAlt.append(err)
           print("Epoch: [%2d] g_iter: [%2d], [%4d/%4d], loss: %.8f" \
                 % (epoch, it, idx, batch_idxs, err))
 
@@ -142,9 +193,25 @@ class DCAM(object):
           Gz = self.sess.run(self.Gz)
           save_images(Gz, image_manifold_size(Gz.shape[0]),
                       './{}/{}.png'.format(config.sample_dir, addZeros(epoch, idx, batch_idxs)))
-
-        if counter % 250 == 2:
-          self.save(config.checkpoint_dir, counter)
+        if counter % 50 == 0: 
+          np.save(('./{}/{}').format(config.checkpoint_dir, addZeros(epoch, idx, batch_idxs)) , errAlt)
+            
+        '''if counter % 250 == 2:
+          self.save(config.checkpoint_dir, counter)'''
+        
+    for epoch in xrange(config.epoch_d):
+      for idx in xrange(batch_idxs): 
+        batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
+        batch = [imread(d, True) for d in batch_files]
+        batch_images = np.expand_dims(np.array(batch).astype(np.float32), axis=-1)
+        for it in xrange(config.d_iter):
+          self.sess.run(d_optim, feed_dict={ self.inputs: batch_images })
+          err = self.d_loss.eval({ self.inputs: batch_images })
+          print("DIS1 Epoch: [%2d] g_iter: [%2d], [%4d/%4d], loss: %.8f" \
+                % (epoch, it, idx, batch_idxs, err))
+    
+            
+            
 
   def generator(self, z):
     with tf.variable_scope("generator") as scope:
