@@ -2,6 +2,7 @@ from __future__ import division
 import os
 import time
 import math
+import cv2
 from glob import glob
 import tensorflow as tf
 import numpy as np
@@ -19,7 +20,7 @@ def conv_out_size_same(size, stride):
 class DCGAN(object):
   def __init__(self, sess, input_height=64, input_width=80, crop=False,
          batch_size=64, sample_num = 64, output_height=64, output_width=80,
-         y_dim=None, z_dim=1000, gf_dim=64, df_dim=64, # change z_dim * 20
+         y_dim=None, z_dim=10, gf_dim=64, df_dim=64, # change z_dim * 20
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='train_img_slices', 
          input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
     """
@@ -80,19 +81,16 @@ class DCGAN(object):
     if self.dataset_name == 'mnist':
       print('mnist')  
     else:
-      self.data = glob("./img_align_celeba/*.jpg")[:3000]
-      #self.data = glob("./data/train_img_slices/*.ra")
+      #self.data = glob("./celebA/*.jpg")[:3000]
+      self.data = glob("./data/train_img_slices/*.ra")
       random.shuffle(self.data)
-      imreadImg = get_image_old1(self.data[0], True);
-      if len(imreadImg.shape) >= 3: #check if image is a non-grayscale image by checking channel number
-        self.c_dim = imread_new(self.data[0]).shape[-1]
-      else:
-        self.c_dim = 1
+      imreadImg = get_image_old2(self.data[0]);
+      self.c_dim = 2#1
 
-    self.grayscale = (self.c_dim == 1)
+    self.grayscale = False#(self.c_dim == 1)
 
-    self.build_model()
-
+    self.build_model() 
+    
   def build_model(self):
     if self.y_dim:
       self.y = tf.placeholder(tf.float32, [self.batch_size, self.y_dim], name='y')
@@ -109,14 +107,19 @@ class DCGAN(object):
 
     inputs = self.inputs
 
+    self.the_mask = tf.placeholder(tf.complex64, [320, 256])
+    self.mask_files = glob("./masks/gen_masks/6_*")
+    self.mask_files = [np.fft.fftshift(np.load(m)) for m in self.mask_files]
+    
+    self.mask = random.choice(self.mask_files)
     self.z = tf.placeholder(
       tf.float32, [None, self.z_dim], name='z')
     self.z_sum = histogram_summary("z", self.z)
 
     self.G                  = self.generator(self.z, self.y)
-    self.D, self.D_logits   = self.discriminator(inputs, self.y, reuse=False)
+    self.D, self.D_logits   = self.discriminator(inputs, self.the_mask, self.y, reuse=False)
     self.sampler            = self.sampler(self.z, self.y)
-    self.D_, self.D_logits_ = self.discriminator(self.G, self.y, reuse=True)
+    self.D_, self.D_logits_ = self.discriminator(self.G, self.the_mask, self.y, reuse=True)
     
     self.d_sum = histogram_summary("d", self.D)
     self.d__sum = histogram_summary("d_", self.D_)
@@ -155,10 +158,7 @@ class DCGAN(object):
               .minimize(self.d_loss, var_list=self.d_vars)
     g_optim = tf.train.AdamOptimizer(config.learning_rate, beta1=config.beta1) \
               .minimize(self.g_loss, var_list=self.g_vars)
-    #d_optim = tf.train.GradientDescentOptimizer(config.learning_rate) \
-    #          .minimize(self.d_loss, var_list=self.d_vars)
-    #g_optim = tf.train.AdamOptimizer(config.learning_rate) \
-    #          .minimize(self.g_loss, var_list=self.g_vars)
+        
     try:
       tf.global_variables_initializer().run()
     except:
@@ -176,13 +176,10 @@ class DCGAN(object):
     if config.dataset == 'mnist':
       print('mnist')  
     else:
-      #sample_files = self.data[0:(self.sample_num // 16)]
-      #sample = get_image(sample_files[0])
-      #for i in range(1, len(sample_files)):
-      #    sample = np.vstack((sample, get_image(sample_files[i])))
       sample_files = self.data[0:(self.sample_num)]
-      #sample = [imread_new(d) for d in sample_files]
-      sample = [get_image_old1(d, True) for  d in sample_files]
+      sample = [get_image_old2(d) for d in sample_files]
+      #sample = [get_image_old1(d, True) for  d in sample_files]
+      #sample = [cv2.resize(s, dsize=(256, 320)) for s in sample]
             
     if (self.grayscale):
         sample_inputs = np.array(sample).astype(np.float32)[:, :, :, None]
@@ -203,8 +200,7 @@ class DCGAN(object):
       if config.dataset == 'mnist':
         print('mnist')    
       else:      
-        #self.data = sorted(glob("./Patches32/*.npy"))
-        #self.data = glob("./data/train_img_slices/*.ra")
+
         batch_idxs = min(len(self.data), config.train_size) // config.batch_size # changed //16
 
       for idxs in xrange(0, batch_idxs):
@@ -212,14 +208,10 @@ class DCGAN(object):
         if config.dataset == 'mnist':
           print('mnist')  
         else:
-          #batch_files = self.data[idx*(config.batch_size//16):(idx+1)*(config.batch_size//16)] # changed //16
-
-          #batch = get_image(batch_files[0])
-          #for i in range(1, len(batch_files)):
-          #    batch = np.vstack((batch, get_image(batch_files[i])))
           batch_files = self.data[idx*(config.batch_size):(idx+1)*(config.batch_size)]
-          #batch = [imread_new(d) for d in batch_files]    
-          batch = [get_image_old1(d, True) for d in batch_files]
+          batch = [get_image_old2(d) for d in batch_files]    
+          #batch = [get_image_old1(d, True) for d in batch_files]
+          #batch = [cv2.resize(b, dsize=(256, 320)) for b in batch]
 
           if self.grayscale:
             batch_images = np.array(batch).astype(np.float32)[:, :, :, None]
@@ -235,32 +227,34 @@ class DCGAN(object):
 
         else:
           # Update D network
+          if np.mod(countD, 7) == 0:
+            self.mask = random.choice(self.mask_files)
           _, summary_str = self.sess.run([d_optim, self.d_sum],
-            feed_dict={ self.inputs: batch_images, self.z: batch_z })
+            feed_dict={ self.inputs: batch_images, self.the_mask: self.mask, self.z: batch_z})
           self.writer.add_summary(summary_str, counter)
           countD += 1
 
           if np.mod(countD, 1) == 0:      
             # Update G network
             _, summary_str = self.sess.run([g_optim, self.g_sum],
-              feed_dict={ self.z: batch_z })
+              feed_dict={ self.z: batch_z, self.the_mask: self.mask })
             self.writer.add_summary(summary_str, counter)
 
             # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
             _, summary_str = self.sess.run([g_optim, self.g_sum],
-              feed_dict={ self.z: batch_z })
+              feed_dict={ self.z: batch_z, self.the_mask: self.mask })
             self.writer.add_summary(summary_str, counter)
           
-            errD_fake = self.d_loss_fake.eval({ self.z: batch_z })
-            errD_real = self.d_loss_real.eval({ self.inputs: batch_images })
-            errG = self.g_loss.eval({self.z: batch_z})
+            errD_fake = self.d_loss_fake.eval({ self.z: batch_z, self.the_mask: self.mask })
+            errD_real = self.d_loss_real.eval({ self.inputs: batch_images, self.the_mask: self.mask })
+            errG = self.g_loss.eval({self.z: batch_z, self.the_mask: self.mask})
 
             counter += 1
             print("Epoch: [%2d] [%4d/%4d] time: %4.4f, d_loss: %.8f, g_loss: %.8f" \
               % (epoch, idx, batch_idxs,
                 time.time() - start_time, errD_fake+errD_real, errG))
 
-        if np.mod(countD, 100) == 1: #100
+        if np.mod(countD, 700) == 1: #100
           if config.dataset == 'mnist':
             print('mnist')
           else:
@@ -270,24 +264,34 @@ class DCGAN(object):
                   feed_dict={
                     self.z: batch_z, #sample_z
                     self.inputs: batch_images, #sample_inputs
+                    self.the_mask: self.mask
                   },
                 )
               save_images(samples, image_manifold_size(samples.shape[0]),
-                  './{}/{}.png'.format(config.sample_dir, addZeros(epoch, idx)))
+                  './{}/{}.png'.format(config.sample_dir, addZeros(0, countD)))
               print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
             except:
               print("one pic error!...")
 
-        if np.mod(countD, 500) == 2: #500
+        if np.mod(countD, 4000) == 2: #500
           self.save(config.checkpoint_dir, counter)
 
-  def discriminator(self, image, y=None, reuse=False):
+  def discriminator(self, image, mask, y=None, reuse=False):
+    c_image = tf.cast(tf.squeeze(image), dtype=tf.complex64)
+    ##c_image = [img[:, :, 0] + 1j*im[:, :, 1] for im in c_image] # need to convert to 1 channel, fft, convert to 2 channel, discrim
+    ffts = tf.fft2d(c_image)
+    masked = tf.multiply(ffts, mask)
+    iffts = tf.real(tf.ifft2d(masked))
+    ifft_f = tf.cast(iffts, dtype=tf.float32)
+    images = tf.expand_dims(ifft_f, -1)
     with tf.variable_scope("discriminator") as scope:
+      
       if reuse:
         scope.reuse_variables()
 
       if not self.y_dim:
-        h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        #h0 = lrelu(conv2d(image, self.df_dim, name='d_h0_conv'))
+        h0 = lrelu(conv2d(images, self.df_dim, name='d_h0_conv'))
         h1 = lrelu(self.d_bn1(conv2d(h0, self.df_dim*2, name='d_h1_conv')))
         h2 = lrelu(self.d_bn2(conv2d(h1, self.df_dim*4, name='d_h2_conv')))
         h3 = lrelu(self.d_bn3(conv2d(h2, self.df_dim*8, name='d_h3_conv')))
@@ -315,7 +319,7 @@ class DCGAN(object):
         h0 = tf.nn.relu(self.g_bn0(self.h0))
 
         self.h1, self.h1_w, self.h1_b = deconv2d(
-            h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
+                h0, [self.batch_size, s_h8, s_w8, self.gf_dim*4], name='g_h1', with_w=True)
         h1 = tf.nn.relu(self.g_bn1(self.h1))
 
         h2, self.h2_w, self.h2_b = deconv2d(

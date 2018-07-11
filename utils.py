@@ -6,6 +6,7 @@ from skimage.util.shape import view_as_windows
 from sklearn.feature_extraction import image
 from skimage import color
 from skimage import io
+from glob import glob
 import math
 import json
 import random
@@ -38,10 +39,23 @@ def get_image(image_path, input_height=256, input_width=320,
               crop=True, grayscale=False):
   return patch_tf(get_image_old(image_path), resize_height, resize_width)
  
-# gets one image from path, does not patch, puts between [-1, 1]    
-def get_image_old1(image_path):
-  image = imread(image_path)
-  return (np.array(image) - 0.5) / 0.5 # *2 - 1
+# gets one image from path, does not patch, puts between [-1, 1]  CURRENT METHOD FOR MRI  
+def get_image_old2(image_path):
+  '''image = imread(image_path)
+  a = (np.array(image) - 0.5) / 0.5 # *2 - 1
+  return np.reshape(a, (320, 256, 1))'''
+  img = (ra.read_ra(os.path.join(image_path))).T
+  test = np.zeros((320, 256, 2))
+  test[:, :, 0] = (np.real(img) - 0.5) / 0.5
+  test[:, :, 1] = np.imag(img)
+  return test
+
+# converts single channel to dual channel
+def convert(img):
+  test = np.zeros((320, 256, 2))
+  test[:, :, 0] = np.real(img)
+  test[:, :, 1] = np.imag(img)
+  return test
 
 def get_image_old1(image_path, grayscale): # only for celebA images
   im = color.rgb2gray(io.imread(image_path))
@@ -64,6 +78,14 @@ def patch_tf(image_, height, width):
                                   strides=[1, height, width, 1], rates=[1, 1, 1, 1], padding='VALID').eval())
   img = np.reshape(img, ((256*320)//(height*width), height, width))
   return img    
+
+def get_mask():
+  masks = glob("./masks/masks/*.ra")
+  img = ra.read_ra(masks[6]).T
+  mag = abs(img)
+  mag = (mag > 0.5)*1.
+  the_mask = np.fft.fftshift(mag)
+  return the_mask
     
 def patch_new(path, height=64, width=80):
   #with tf.Session() as sess:
