@@ -20,7 +20,7 @@ def conv_out_size_same(size, stride):
 class DCGAN(object):
   def __init__(self, sess, input_height=64, input_width=80, crop=False,
          batch_size=64, sample_num = 64, output_height=64, output_width=80,
-         y_dim=None, z_dim=10, gf_dim=64, df_dim=64, # change z_dim * 20
+         y_dim=None, z_dim=1000, gf_dim=64, df_dim=64, # change z_dim * 20
          gfc_dim=1024, dfc_dim=1024, c_dim=3, dataset_name='train_img_slices', 
          input_fname_pattern='*.jpg', checkpoint_dir=None, sample_dir=None):
     """
@@ -229,21 +229,21 @@ class DCGAN(object):
           # Update D network
           if np.mod(countD, 7) == 0:
             self.mask = random.choice(self.mask_files)
-          _, summary_str = self.sess.run([d_optim, self.d_sum],
+          _ = self.sess.run([d_optim],
             feed_dict={ self.inputs: batch_images, self.the_mask: self.mask, self.z: batch_z})
-          self.writer.add_summary(summary_str, counter)
+          #self.writer.add_summary(summary_str, counter)
           countD += 1
 
           if np.mod(countD, 1) == 0:      
             # Update G network
-            _, summary_str = self.sess.run([g_optim, self.g_sum],
+            _ = self.sess.run([g_optim],
               feed_dict={ self.z: batch_z, self.the_mask: self.mask })
-            self.writer.add_summary(summary_str, counter)
+            #self.writer.add_summary(summary_str, counter)
 
             # Run g_optim twice to make sure that d_loss does not go to zero (different from paper)
-            _, summary_str = self.sess.run([g_optim, self.g_sum],
+            _ = self.sess.run([g_optim],
               feed_dict={ self.z: batch_z, self.the_mask: self.mask })
-            self.writer.add_summary(summary_str, counter)
+            #self.writer.add_summary(summary_str, counter)
           
             errD_fake = self.d_loss_fake.eval({ self.z: batch_z, self.the_mask: self.mask })
             errD_real = self.d_loss_real.eval({ self.inputs: batch_images, self.the_mask: self.mask })
@@ -254,36 +254,39 @@ class DCGAN(object):
               % (epoch, idx, batch_idxs,
                 time.time() - start_time, errD_fake+errD_real, errG))
 
-        if np.mod(countD, 700) == 1: #100
+        if np.mod(countD, 700) == 1: #700
           if config.dataset == 'mnist':
             print('mnist')
           else:
-            try:
-              samples, d_loss, g_loss = self.sess.run(
+            #try:
+            samples, d_loss, g_loss = self.sess.run(
                 [self.sampler, self.d_loss, self.g_loss],
                   feed_dict={
                     self.z: batch_z, #sample_z
                     self.inputs: batch_images, #sample_inputs
                     self.the_mask: self.mask
                   },
-                )
-              save_images(samples, image_manifold_size(samples.shape[0]),
+            )
+            save_images(samples, image_manifold_size(samples.shape[0]),
                   './{}/{}.png'.format(config.sample_dir, addZeros(0, countD)))
-              print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
-            except:
-              print("one pic error!...")
+            print("[Sample] d_loss: %.8f, g_loss: %.8f" % (d_loss, g_loss)) 
+            #except:
+            #  print("one pic error!...")
 
-        if np.mod(countD, 4000) == 2: #500
+        if np.mod(countD, 4000) == 2: #4000
           self.save(config.checkpoint_dir, counter)
 
   def discriminator(self, image, mask, y=None, reuse=False):
     c_image = tf.cast(tf.squeeze(image), dtype=tf.complex64)
-    ##c_image = [img[:, :, 0] + 1j*im[:, :, 1] for im in c_image] # need to convert to 1 channel, fft, convert to 2 channel, discrim
+    c_image = tf.stack([c_image[0, :, :, 0] + 1j*c_image[0, :, :, 1], c_image[1, :, :, 0] + 1j*c_image[1, :, :, 1], c_image[2, :, :, 0] + 1j*c_image[2, :, :, 1], c_image[3, :, :, 0] + 1j*c_image[3, :, :, 1]])
+    #c_image = [img[:, :, 0] + 1j*im[:, :, 1] for im in c_image] # need to convert to 1 channel, fft, convert to 2 channel, discrim
     ffts = tf.fft2d(c_image)
     masked = tf.multiply(ffts, mask)
-    iffts = tf.real(tf.ifft2d(masked))
-    ifft_f = tf.cast(iffts, dtype=tf.float32)
-    images = tf.expand_dims(ifft_f, -1)
+    ###iffts = tf.real(tf.ifft2d(masked))
+    ###ifft_f = tf.cast(iffts, dtype=tf.float32)
+    ###images = tf.expand_dims(ifft_f, -1)
+    iffts = tf.ifft2d(masked)
+    images = tf.cast(tf.stack([convert(iffts[0, :, :]), convert(iffts[1, :, :]), convert(iffts[2, :, :]), convert(iffts[3, :, :])]), dtype=tf.float32)
     with tf.variable_scope("discriminator") as scope:
       
       if reuse:

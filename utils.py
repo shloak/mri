@@ -52,10 +52,11 @@ def get_image_old2(image_path):
 
 # converts single channel to dual channel
 def convert(img):
-  test = np.zeros((320, 256, 2))
-  test[:, :, 0] = np.real(img)
-  test[:, :, 1] = np.imag(img)
-  return test
+  '''test = np.zeros((320, 256, 2))
+  test[:, :, 0] = tf.real(img)
+  test[:, :, 1] = tf.imag(img)
+  return tf.convert_to_tensor(test, dtype=tf.float32)'''
+  return tf.stack([tf.real(img), tf.imag(img)], axis=2)
 
 def get_image_old1(image_path, grayscale): # only for celebA images
   im = color.rgb2gray(io.imread(image_path))
@@ -178,7 +179,10 @@ def transform(image, input_height, input_width,
 
 def inverse_transform(images):
   #return (images+1.)/2.
-  return (images * 0.5) + 0.5
+  c_image = (images * 0.5) + 0.5
+  return np.expand_dims(c_image[:, :, :, 0], axis=-1)
+  '''c_image = tf.stack([tf.sqrt(tf.square(c_image[0, :, :, 0]) + tf.square(c_image[0, :, :, 1])), tf.sqrt(tf.square(c_image[1, :, :, 0]) + tf.square(c_image[1, :, :, 1])), tf.sqrt(tf.square(c_image[2, :, :, 0]) + tf.square(c_image[2, :, :, 1])), tf.sqrt(tf.square(c_image[3, :, :, 0]) + tf.square(c_image[3, :, :, 1]))])'''
+  return c_image
 
 def to_json(output_path, *layers):
   with open(output_path, "w") as layer_f:
