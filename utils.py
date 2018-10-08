@@ -47,7 +47,7 @@ def get_image_old2(image_path):
   img = (ra.read_ra(os.path.join(image_path))).T
   test = np.zeros((320, 256, 2))
   test[:, :, 0] = (np.real(img) - 0.5) / 0.5
-  test[:, :, 1] = np.imag(img)
+  test[:, :, 1] = np.imag(img) #(np.imag(img) - 0.5) / 0.5 #
   return test
 
 # converts single channel to dual channel
