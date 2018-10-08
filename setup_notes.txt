@@ -1,0 +1,12 @@
+export DISPLAY=localhost:0.0 // sets up display on windows machine
+ssh -N -f -L localhost:8888:localhost:8888 // mirrors 8888 on local to 8888 on remote
+jupyter notebook --no-browser --port=8888 // jupyter notebook on remote with no browser
+
+https://www.imagemagick.org/discourse-server/viewtopic.php?t=29830 // image magick gif conversion
+
+byobu 
+byobu new-session
+^A ^D // leave byobu session (still running)
+
+python dcgan_keras.py --mode train --batch_size <size> // runs keras dcgan to train
+python main.py --train --sample_dir <folder to save samples> --checkpoint_dir <folder to save checkpoints> // runs tf dcgan to train
