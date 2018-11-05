@@ -74,7 +74,9 @@ class DCGAN(object):
       self.data_X, self.data_y = self.load_mnist()
       self.c_dim = self.data_X[0].shape[-1]
     else:
-      self.c_dim = 1
+      self.data = glob("./img_align_celeba/*.jpg")[:3000]
+      random.shuffle(self.data)
+      self.c_dim = 2
 
     self.grayscale = (self.c_dim == 1)
 
@@ -100,7 +102,7 @@ class DCGAN(object):
     #  tf.float32, [64, self.z_dim], name='z')
 
     self.z = tf.Variable(
-      tf.random_uniform([self.sample_num, self.z_dim], -1, 1), name='z')
+      tf.random_uniform([self.sample_num, 1000], -1, 1), name='z')
 
     self.z_sum = histogram_summary("z", self.z)
 
@@ -160,8 +162,7 @@ class DCGAN(object):
     sample_z = np.random.uniform(-1, 1, size=(self.sample_num , self.z_dim))
     
     if config.dataset == 'mnist':
-      sample_inputs = self.data_X[0:self.sample_num]
-      sample_labels = self.data_y[0:self.sample_num]
+      print('mnist')  
     else:
       sample_files = self.data[0:self.sample_num]
       sample = [
