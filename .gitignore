@@ -6,3 +6,7 @@ valid_img_slices
 logs
 .ipynb_checkpoints
 __pycache__
+.data-00000-of-00001
+.index
+.meta
+
