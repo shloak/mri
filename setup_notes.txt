@@ -3,6 +3,7 @@ ssh -N -f -L localhost:8888:localhost:8888 // mirrors 8888 on local to 8888 on r
 jupyter notebook --no-browser --port=8888 // jupyter notebook on remote with no browser
 
 https://www.imagemagick.org/discourse-server/viewtopic.php?t=29830 // image magick gif conversion
+windows: magick convert -loop 1 -delay 25 *.png out.gif
 
 byobu 
 byobu new-session
@@ -10,3 +11,5 @@ byobu new-session
 
 python dcgan_keras.py --mode train --batch_size <size> // runs keras dcgan to train
 python main.py --train --sample_dir <folder to save samples> --checkpoint_dir <folder to save checkpoints> // runs tf dcgan to train
+
+matplotlib version: 1.5.3
