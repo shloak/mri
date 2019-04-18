@@ -7,13 +7,7 @@ import cv2
 
 from keras.models import Sequential
 from keras.models import Model
-from keras.layers import Dense, Activation, MaxPooling2D, BatchNormalization, LeakyReLU
-from keras.layers import Convolution2D
-from keras.layers import AveragePooling2D
-from keras.layers import UpSampling2D
-from keras.layers import Reshape
-from keras.layers import Flatten
-from keras.layers import Input
+from keras.layers import *  
 from keras.optimizers import Adam
 from utils import *
 import keras.backend as K
@@ -24,7 +18,7 @@ config.gpu_options.allow_growth=True
 sess = tf.Session(config=config) 
 K.set_session(sess)
 
-tf.random.set_random_seed(10)
+#tf.random.set_random_seed(10)
 np.random.seed(10)
 
 data = glob("./data/test_img_slices/*.ra")
@@ -38,13 +32,13 @@ minv, maxv = 0, 0
 #img = get_image_old2(data[0]) 
 img = get_image_old2('./data/test_img_slices/19_100.ra') # same - for linux
 plt.imshow(img[:, :, 0], cmap='gray')
-plt.show()
+#plt.show()
 minv = np.min(img[:, :, 0])
 maxv = np.max(img[:, :, 0])
 #plt.imshow(-1 + (2 * np.array(img[:, :, 0]) / (maxv - minv)), cmap='gray')
 normalized_img = np.expand_dims(-1 + (2 * (np.array(img[:, :, 0] - minv) / (maxv - minv))), 2)
 plt.imshow(normalized_img[:, :, 0], cmap='gray')
-plt.show()
+#plt.show()
 minv = np.min(normalized_img[:, :, 0])
 maxv = np.max(normalized_img[:, :, 0])
 print(minv, maxv)
@@ -52,13 +46,13 @@ print(minv, maxv)
 #img2 = get_image_old2(data[70])
 img2 = get_image_old2('./data/test_img_slices/19_170.ra') # same - for linux
 plt.imshow(img2[:, :, 0], cmap='gray')
-plt.show()
+#plt.show()
 minv = np.min(img2[:, :, 0])
 maxv = np.max(img2[:, :, 0])
 #plt.imshow(-1 + (2 * np.array(img[:, :, 0]) / (maxv - minv)), cmap='gray')
 normalized_img2 = np.expand_dims(-1 + (2 * (np.array(img2[:, :, 0] - minv) / (maxv - minv))), 2)
 plt.imshow(normalized_img2[:, :, 0], cmap='gray')
-plt.show()
+#plt.show()
 minv = np.min(normalized_img2[:, :, 0])
 maxv = np.max(normalized_img2[:, :, 0])
 print(minv, maxv)
@@ -68,12 +62,12 @@ mask_files = [np.fft.fftshift(np.load(m)) for m in mask_files]
 mask = mask_files[0]
 new_img = np.fft.ifft2(np.multiply(np.fft.fft2(normalized_img[:, :, 0]), mask)).astype(float)
 plt.imshow(new_img, cmap='gray')
-plt.show()
+#plt.show()
 minv = np.min(new_img)
 maxv = np.max(new_img)
 normalized_new_img = np.expand_dims(-1 + (2 * (new_img - minv) / (maxv - minv)), 2)
 plt.imshow(normalized_new_img[:, :, 0], cmap='gray')
-plt.show()
+#plt.show()
 print(np.min(normalized_new_img))
 print(np.max(normalized_new_img))
 image_shape = normalized_img.shape
@@ -121,6 +115,46 @@ def get_subsampled_normalized(normalized_img, subs, plot=False):
     #print(np.min(normalized_new_img))
     #print(np.max(normalized_new_img))
     return normalized_new_img
+
+def define_unet_4(verbose=False):
+    inputs = Input((320, 256, 1))
+    conv1 = Convolution2D(8, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(inputs)
+    pool1 = MaxPooling2D(padding='same')(conv1)
+    conv2 = Convolution2D(8, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(pool1)
+    conv3 = Convolution2D(16, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(conv2)
+    pool2 = MaxPooling2D(padding='same')(conv3)
+    conv4 = Convolution2D(16, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(pool2)
+    conv5 = Convolution2D(32, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(conv4)
+    pool3 = MaxPooling2D(padding='same')(conv5)
+    conv6 = Convolution2D(32, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(pool3)
+    conv7 = Convolution2D(64, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(conv6)
+    pool3 = MaxPooling2D(padding='same')(conv7)
+    conv8 = Convolution2D(64, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(pool3)
+    flat1 = Flatten()(conv8)
+    dense1 = Dense(((320 // (2**4)) * (256 // (2**4))), activation = 'tanh')(flat1)
+    dense1 = Reshape(((320 // (2**4)), (256 // (2**4)), 1))(dense1)
+    conv9 = Convolution2D(128, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(dense1)
+    conv10 = Convolution2D(128, 1, padding = 'same', activation='relu', kernel_initializer='he_normal')(conv9)
+    ups1 = UpSampling2D()(conv10)
+    conv11 = Convolution2D(64, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(ups1)
+    merge1 = concatenate([conv11, conv7], axis = 3)
+    conv12 = Convolution2D(64, 1, padding = 'same', activation='relu', kernel_initializer='he_normal')(merge1)
+    ups2 = UpSampling2D()(conv12)
+    conv13 = Convolution2D(32, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(ups2)
+    merge2 = concatenate([conv13, conv5], axis = 3)
+    conv14 = Convolution2D(32, 1, padding = 'same', activation='relu', kernel_initializer='he_normal')(merge2)
+    ups3 = UpSampling2D()(conv14)
+    conv15 = Convolution2D(16, 3, padding = 'same', activation='relu', kernel_initializer='he_normal')(ups3)
+    merge3 = concatenate([conv15, conv3], axis = 3)
+    conv16 = Convolution2D(16, 1, padding = 'same', activation='relu', kernel_initializer='he_normal')(merge3)
+    ups4 = UpSampling2D()(conv16)
+    conv17 = Convolution2D(1, 3, padding = 'same', activation='tanh', kernel_initializer='he_normal')(ups4)
+
+    model = Model(input=inputs, output=conv17)
+    if verbose:
+        model.summary()
+    return model
+
 
 # 5 upsampling, downsampling layers
 
@@ -602,13 +636,15 @@ def train_network(network, noise, y, epochs, iterations, ground_truth, losses, j
 # train on noise, fit using input=2x subsample (fit to 4x subsample)
 
 trials = 3
-all_results = [[] for i in range(5)] # same image, diff image, diff image, brain, no init
+all_results = [[] for i in range(4)] # same image, diff image, diff image, brain, no init
 for i in range(trials):
-    noisy = np.random.random(size=image_shape) * 2 - 1
-    test_noise = get_subsampled_normalized(get_image_normalized(100), 2) #np.random.random(size=image_shape) * 2 - 1
-    epochs, iters = 70, 25 # 1e-3 training on recon w jitter
-    epochs1, iters1 = 70, 25 # 1e-3 init pretraining step w jitter
-    epochs2, iters2 = 70, 25 # 1e-4 training on recon no jitter
+    noisy = np.random.random(size=image_shape) * 2 - 1 #get_subsampled_normalized(get_image_normalized(70), 2) 
+    noisy2 = np.random.random(size=image_shape) * 2 - 1 # get_subsampled_normalized(get_image_normalized(170), 2)
+    noisy3 = np.random.random(size=image_shape) * 2 - 1 # get_subsampled_normalized(get_image_normalized(240), 2)
+    test_noise = np.random.random(size=image_shape) * 2 - 1 # get_subsampled_normalized(get_image_normalized(100), 2) 
+    epochs, iters = 70, 20 # 1e-3 training on recon w jitter
+    epochs1, iters1 = 70, 20 # 1e-3 init pretraining step w jitter
+    epochs2, iters2 = 70, 20 # 1e-4 training on recon no jitter
     second_train = True
 
 
@@ -618,11 +654,19 @@ for i in range(trials):
     jit_sched = [0.1 if k < iters // 2 else 0.01 for k in range(iters)]
     
     normalized_img = get_batch_normalized([100])
+    normalized_img1 = get_batch_normalized([70])
+    normalized_img2 = get_batch_normalized([170])
+    normalized_img3 = get_batch_normalized([240])
     normalized_new_img = get_subsampled_normalized(get_image_normalized(100), 4)
-    autoencoder = define_network_4(verbose=False)
+    autoencoder = define_unet_4()
     autoencoder.compile(Adam(1e-3), loss = 'mae')
-    results, losses, new_noise = train_network(autoencoder, noise, normalized_img, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    results, losses, new_noise = train_network(autoencoder, np.array([noisy]), normalized_img1, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    results, losses, new_noise = train_network(autoencoder, np.array([noisy2]), normalized_img2, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    results, losses, new_noise = train_network(autoencoder, np.array([noisy3]), normalized_img3, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
 
+    
+    
+    
     autoencoder.compile(Adam(1e-3), loss = recon_loss_L1_4)
     [0.1 if k < iters // 2 else 0.01 for k in range(iters)] #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)] 
     normalized_img = get_image_normalized(100)
@@ -631,100 +675,82 @@ for i in range(trials):
         autoencoder.compile(Adam(1e-4), loss = recon_loss_L1_4)
         results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs2, iters2, normalized_img, [L1_loss, L2_loss], jitter_schedule=[0.005], plot=False)
     all_results[0].append((results, losses))
+
     
     del autoencoder
     gc.collect()
 
-    batch_size = 1
     print('start 2')
-    noise = np.array([get_subsampled_normalized(get_image_normalized(170), 2)])  #np.array([noisy for _ in range(batch_size)])
-    jit_sched = [0.1 if k < iters // 2 else 0.01 for k in range(iters)]
-    
-    normalized_img = get_batch_normalized([170])
-    normalized_new_img = get_subsampled_normalized(get_image_normalized(100), 4)
-    autoencoder = define_network_4(verbose=False)
+    autoencoder = define_unet_4()
     autoencoder.compile(Adam(1e-3), loss = 'mae')
-    results, losses, new_noise = train_network(autoencoder, noise, normalized_img, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    #results, losses, new_noise = train_network(autoencoder, np.array([noisy]), normalized_img1, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    results, losses, new_noise = train_network(autoencoder, np.array([noisy2]), normalized_img2, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    results, losses, new_noise = train_network(autoencoder, np.array([noisy3]), normalized_img3, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
 
+    
+    
+    
     autoencoder.compile(Adam(1e-3), loss = recon_loss_L1_4)
-    #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)]  #[0.1 if k < iters // 2 else 0.01 for k in range(iters)]
+    [0.1 if k < iters // 2 else 0.01 for k in range(iters)] #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)] 
     normalized_img = get_image_normalized(100)
     results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs, iters, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False)
     if second_train:
         autoencoder.compile(Adam(1e-4), loss = recon_loss_L1_4)
         results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs2, iters2, normalized_img, [L1_loss, L2_loss], jitter_schedule=[0.005], plot=False)
     all_results[1].append((results, losses))
+
     
     del autoencoder
     gc.collect()
 
-    batch_size = 1
     print('start 3')
-    noise = np.array([get_subsampled_normalized(get_image_normalized(240), 2)]) #np.array([noisy for _ in range(batch_size)])
-    jit_sched = [0.1 if k < iters // 2 else 0.01 for k in range(iters)]
-    
-    normalized_img = get_batch_normalized([240])
-    normalized_new_img = get_subsampled_normalized(get_image_normalized(100), 4)
-    autoencoder = define_network_4(verbose=False)
-    autoencoder.compile(Adam(1e-3), loss = 'mae')
-    results, losses, new_noise = train_network(autoencoder, noise, normalized_img, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
 
+    autoencoder = define_unet_4()
+    autoencoder.compile(Adam(1e-3), loss = 'mae')
+    #results, losses, new_noise = train_network(autoencoder, np.array([noisy]), normalized_img1, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    #results, losses, new_noise = train_network(autoencoder, np.array([noisy2]), normalized_img2, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+    results, losses, new_noise = train_network(autoencoder, np.array([noisy3]), normalized_img3, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False, batch_size=batch_size)
+
+    
+    
+    
     autoencoder.compile(Adam(1e-3), loss = recon_loss_L1_4)
-    #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)]  #[0.1 if k < iters // 2 else 0.01 for k in range(iters)]
+    [0.1 if k < iters // 2 else 0.01 for k in range(iters)] #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)] 
     normalized_img = get_image_normalized(100)
     results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs, iters, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False)
     if second_train:
         autoencoder.compile(Adam(1e-4), loss = recon_loss_L1_4)
         results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs2, iters2, normalized_img, [L1_loss, L2_loss], jitter_schedule=[0.005], plot=False)
     all_results[2].append((results, losses))
+
     
     del autoencoder
     gc.collect()
 
-    batch_size = 1
     print('start 4')
-    #noise = np.array([noisy for _ in range(batch_size)])
-    noisy = get_subsampled_normalized(get_brain_normalized(), 2)
-    jit_sched = [0.1 if k < iters // 2 else 0.01 for k in range(iters)]
-    
-    normalized_img = get_brain_normalized()
-    normalized_new_img = get_subsampled_normalized(get_image_normalized(100), 4)
-    autoencoder = define_network_4(verbose=False)
+    autoencoder = define_unet_4()
     autoencoder.compile(Adam(1e-3), loss = 'mae')
-    results, losses, new_noise = train_network(autoencoder, noisy, normalized_img, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False)
+    #results, losses, new_noise = train_network(autoencoder, np.array([noisy]), normalized_img1, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=True, batch_size=batch_size)
+    #results, losses, new_noise = train_network(autoencoder, np.array([noisy2]), normalized_img2, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=True, batch_size=batch_size)
+    #results, losses, new_noise = train_network(autoencoder, np.array([noisy3]), normalized_img3, epochs1, iters1, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=True, batch_size=batch_size)
+
+    
+    
 
     autoencoder.compile(Adam(1e-3), loss = recon_loss_L1_4)
-    #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)]  #[0.1 if k < iters // 2 else 0.01 for k in range(iters)]
+    [0.1 if k < iters // 2 else 0.01 for k in range(iters)] #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)] 
     normalized_img = get_image_normalized(100)
-    results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs, iters, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False) # was new_noise[0]
+    results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs, iters, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False)
     if second_train:
         autoencoder.compile(Adam(1e-4), loss = recon_loss_L1_4)
         results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs2, iters2, normalized_img, [L1_loss, L2_loss], jitter_schedule=[0.005], plot=False)
     all_results[3].append((results, losses))
+
     
     del autoencoder
     gc.collect()
 
-    batch_size = 1
-    print('start 4')
-    #noise = np.array([noisy for _ in range(batch_size)])
-    #noise = np.array([np.random.random(size=image_shape) * 2 - 1 for _ in range(batch_size)])
-    jit_sched = [0.1 if k < iters // 2 else 0.01 for k in range(iters)]
-    
-    normalized_new_img = get_subsampled_normalized(get_image_normalized(100), 4)
-    autoencoder = define_network_4(verbose=False)
-    
-    autoencoder.compile(Adam(1e-3), loss = recon_loss_L1_4)
-    #jit_sched = [0 if iters % 10 != 0 else 0.1 if k < iters // 2 else 0.01 for k in range(iters)]  #[0.1 if k < iters // 2 else 0.01 for k in range(iters)]
-    normalized_img = get_image_normalized(100)
-    results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs, iters, normalized_img, [L1_loss, L2_loss], jitter_schedule=jit_sched, plot=False) # was new_noise[0]
-    if second_train:
-        autoencoder.compile(Adam(1e-4), loss = recon_loss_L1_4)
-        results, losses, _ = train_network(autoencoder, test_noise, normalized_new_img, epochs2, iters2, normalized_img, [L1_loss, L2_loss], jitter_schedule=[0.005], plot=False)
-    all_results[4].append((results, losses))
-    
-    del autoencoder
-    gc.collect()
+
     
 
-np.save('diff_inits_L1_trainfeedrecon', all_results)
+np.save('diff_sequential_training_L1', all_results)
